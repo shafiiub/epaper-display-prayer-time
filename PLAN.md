@@ -152,3 +152,16 @@ Notes:
 - Deep sleep or battery operation. The board stays on Wi-Fi powered by USB. Deep sleep
   could come later, waking every 5 minutes, but it adds HA reconnect time on each wake.
 - Adhan audio and notifications.
+
+## Status (2026-11-06): v1 deployed
+
+- HA: added the **Islamic Prayer Times** integration with method `mwl`, school `shafi`.
+  Its sensors are `sensor.islamic_prayer_times_{fajr_prayer,sunrise_time,dhuhr_prayer,asr_prayer,maghrib_prayer,isha_prayer}`.
+- HA: added 9 Template helpers `sensor.epd_{fajr,sunrise,dhuhr,asr,sunset,maghrib,isha,next_prayer,next_in}`.
+  A reference copy is in `homeassistant/prayer_display_templates.yaml`.
+- HA: added the device to the ESPHome integration. It had been in Device Builder only, so it
+  had no time sync and no HA states.
+- Device: `ttgo-t5-epaper.yaml` in this repo is the exact config in Device Builder. Secrets are
+  in Device Builder's `secrets.yaml` (`epd_api_key`, `epd_ota_password`, `epd_ap_ssid`,
+  `epd_ap_password`, plus the existing `wifi_ssid`/`wifi_password`). Flashed over OTA with ESPHome 2026.10.1.
+- Unused leftover secrets `epd_wifi_ssid` / `epd_wifi_password` can be deleted from `secrets.yaml`.

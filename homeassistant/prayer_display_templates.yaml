@@ -1,0 +1,41 @@
+# Reference copy of the HA template helpers used by the display.
+# They were created as UI Template helpers (Settings > Devices & services > Helpers).
+# The same definitions can be used as a package: homeassistant: packages: !include_dir_named packages
+template:
+  - sensor:
+      - name: "EPD Fajr"
+        unique_id: epd_fajr
+        state: >-
+          {% set t = as_timestamp(states('sensor.islamic_prayer_times_fajr_prayer'), 0) %}{{ t | timestamp_custom('%H:%M') if t else '--:--' }}
+      - name: "EPD Sunrise"
+        unique_id: epd_sunrise
+        state: >-
+          {% set t = as_timestamp(states('sensor.islamic_prayer_times_sunrise_time'), 0) %}{{ t | timestamp_custom('%H:%M') if t else '--:--' }}
+      - name: "EPD Dhuhr"
+        unique_id: epd_dhuhr
+        state: >-
+          {% set t = as_timestamp(states('sensor.islamic_prayer_times_dhuhr_prayer'), 0) %}{{ t | timestamp_custom('%H:%M') if t else '--:--' }}
+      - name: "EPD Asr"
+        unique_id: epd_asr
+        state: >-
+          {% set t = as_timestamp(states('sensor.islamic_prayer_times_asr_prayer'), 0) %}{{ t | timestamp_custom('%H:%M') if t else '--:--' }}
+      - name: "EPD Sunset"
+        unique_id: epd_sunset
+        state: >-
+          {% set t = as_timestamp(state_attr('sun.sun', 'next_setting'), 0) %}{{ t | timestamp_custom('%H:%M') if t else '--:--' }}
+      - name: "EPD Maghrib"
+        unique_id: epd_maghrib
+        state: >-
+          {% set t = as_timestamp(states('sensor.islamic_prayer_times_maghrib_prayer'), 0) %}{{ t | timestamp_custom('%H:%M') if t else '--:--' }}
+      - name: "EPD Isha"
+        unique_id: epd_isha
+        state: >-
+          {% set t = as_timestamp(states('sensor.islamic_prayer_times_isha_prayer'), 0) %}{{ t | timestamp_custom('%H:%M') if t else '--:--' }}
+      - name: "EPD Next Prayer"
+        unique_id: epd_next_prayer
+        state: >-
+          {% set ns = namespace(n='Fajr', t=none) %}{% for name, s in [('Isha','isha_prayer'),('Maghrib','maghrib_prayer'),('Asr','asr_prayer'),('Dhuhr','dhuhr_prayer'),('Fajr','fajr_prayer')] %}{% set d = as_datetime(states('sensor.islamic_prayer_times_' ~ s), none) %}{% if d is not none and d > now() %}{% set ns.n = name %}{% set ns.t = d %}{% endif %}{% endfor %}{{ ns.n }}
+      - name: "EPD Next In"
+        unique_id: epd_next_in
+        state: >-
+          {% set ns = namespace(n='Fajr', t=none) %}{% for name, s in [('Isha','isha_prayer'),('Maghrib','maghrib_prayer'),('Asr','asr_prayer'),('Dhuhr','dhuhr_prayer'),('Fajr','fajr_prayer')] %}{% set d = as_datetime(states('sensor.islamic_prayer_times_' ~ s), none) %}{% if d is not none and d > now() %}{% set ns.n = name %}{% set ns.t = d %}{% endif %}{% endfor %}{% set f = as_datetime(states('sensor.islamic_prayer_times_fajr_prayer'), none) %}{% set t = ns.t if ns.t is not none else (f + timedelta(days=1) if f is not none else none) %}{% if t is none %}--{% else %}{% set m = ((t - now()).total_seconds() // 60) | int %}{{ '%dh %02dm' % (m // 60, m % 60) if m >= 60 else '%dm' % m }}{% endif %}

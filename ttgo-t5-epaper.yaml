@@ -1,0 +1,125 @@
+esphome:
+  name: ttgo-t5-epaper
+  friendly_name: TTGO-T5-EPaper
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+logger:
+
+# Secrets live in Device Builder's secrets.yaml, never in this (public) repo.
+api:
+  encryption:
+    key: !secret epd_api_key
+  on_client_connected:
+    # Draw once shortly after HA connects so the first screen isn't blank.
+    - delay: 15s
+    - component.update: epd
+
+ota:
+  - platform: esphome
+    password: !secret epd_ota_password
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  power_save_mode: none
+  ap:
+    ssid: !secret epd_ap_ssid
+    password: !secret epd_ap_password
+
+captive_portal:
+
+time:
+  - platform: homeassistant
+    id: ha_time
+
+# Pre-formatted in HA (template helpers sensor.epd_*), see PLAN.md.
+text_sensor:
+  - { platform: homeassistant, id: t_fajr,    entity_id: sensor.epd_fajr }
+  - { platform: homeassistant, id: t_sunrise, entity_id: sensor.epd_sunrise }
+  - { platform: homeassistant, id: t_dhuhr,   entity_id: sensor.epd_dhuhr }
+  - { platform: homeassistant, id: t_asr,     entity_id: sensor.epd_asr }
+  - { platform: homeassistant, id: t_sunset,  entity_id: sensor.epd_sunset }
+  - { platform: homeassistant, id: t_maghrib, entity_id: sensor.epd_maghrib }
+  - { platform: homeassistant, id: t_isha,    entity_id: sensor.epd_isha }
+  - { platform: homeassistant, id: t_next,    entity_id: sensor.epd_next_prayer }
+  - { platform: homeassistant, id: t_next_in, entity_id: sensor.epd_next_in }
+
+spi:
+  clk_pin: 18
+  mosi_pin: 23
+
+font:
+  - file: "gfonts://Roboto"
+    id: f_name
+    size: 16
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: f_time
+    size: 20
+  - file:
+      type: gfonts
+      family: Roboto
+      weight: 700
+    id: f_head
+    size: 16
+
+display:
+  - platform: waveshare_epaper
+    id: epd
+    model: 2.90in
+    cs_pin: 5
+    dc_pin: 17
+    busy_pin: 4
+    reset_pin: 16
+    rotation: 270
+    update_interval: 300s   # redraw every 5 minutes
+    full_update_every: 12   # full refresh once an hour to clear ghosting
+    lambda: |-
+      // 296 x 128 landscape
+      auto val = [](text_sensor::TextSensor *s, const char *dflt) -> std::string {
+        return (s->has_state() && !s->state.empty() && s->state != "unknown" && s->state != "unavailable")
+                   ? s->state : std::string(dflt);
+      };
+      std::string next = val(id(t_next), "");
+      std::string next_in = val(id(t_next_in), "");
+      auto now = id(ha_time).now();
+
+      // Header: date on the left, next-prayer countdown on the right
+      if (now.is_valid()) {
+        it.printf(4, 2, id(f_head), "%s %d %s", now.strftime("%a").c_str(),
+                  now.day_of_month, now.strftime("%b %Y").c_str());
+      }
+      if (!next.empty() && !next_in.empty()) {
+        it.printf(292, 2, id(f_head), TextAlign::TOP_RIGHT, "%s in %s", next.c_str(), next_in.c_str());
+      }
+      it.line(0, 22, 295, 22);
+      it.line(148, 22, 148, 127);
+
+      // 2 x 4 grid, chronological down each column
+      struct Cell { const char *name; text_sensor::TextSensor *s; };
+      const Cell cells[7] = {
+        {"Fajr", id(t_fajr)}, {"Sunrise", id(t_sunrise)}, {"Dhuhr", id(t_dhuhr)}, {"Asr", id(t_asr)},
+        {"Sunset", id(t_sunset)}, {"Maghrib", id(t_maghrib)}, {"Isha", id(t_isha)},
+      };
+      for (int i = 0; i < 8; i++) {
+        int x = (i < 4) ? 0 : 149;
+        int y = 24 + (i % 4) * 26;
+        int cy = y + 13;
+        if (i == 7) {
+          it.print(x + 6, cy, id(f_name), TextAlign::CENTER_LEFT, "Updated");
+          if (now.is_valid())
+            it.strftime(x + 141, cy, id(f_time), TextAlign::CENTER_RIGHT, "%H:%M", now);
+          continue;
+        }
+        bool hl = next == cells[i].name;   // only prayers match; Sunrise/Sunset never do
+        Color c = hl ? COLOR_OFF : COLOR_ON;
+        if (hl) it.filled_rectangle(x + 1, y, 146, 25);
+        it.print(x + 6, cy, id(f_name), c, TextAlign::CENTER_LEFT, cells[i].name);
+        it.print(x + 141, cy, id(f_time), c, TextAlign::CENTER_RIGHT, val(cells[i].s, "--:--").c_str());
+      }
