@@ -14,9 +14,14 @@ api:
   encryption:
     key: !secret epd_api_key
   on_client_connected:
-    # Draw once shortly after HA connects so the first screen isn't blank.
+    # Draw shortly after HA connects. Three full refreshes in a row wipe any
+    # ghost image left on the panel (e.g. from old firmware).
     - delay: 15s
-    - component.update: epd
+    - repeat:
+        count: 3
+        then:
+          - component.update: epd
+          - delay: 3s
 
 ota:
   - platform: esphome
@@ -55,33 +60,38 @@ spi:
 font:
   - file: "gfonts://Roboto"
     id: f_name
-    size: 16
+    size: 14
   - file:
       type: gfonts
       family: Roboto
       weight: 700
     id: f_time
-    size: 20
+    size: 18
   - file:
       type: gfonts
       family: Roboto
       weight: 700
     id: f_head
-    size: 16
+    size: 14
 
 display:
   - platform: waveshare_epaper
     id: epd
-    model: 2.90in
+    # LilyGO T5 V2.3.1, 2.13" panel (250 x 122). The 2.90in driver never refreshed it.
+    model: 2.13in-ttgo-b74
     cs_pin: 5
     dc_pin: 17
     busy_pin: 4
     reset_pin: 16
     rotation: 270
     update_interval: 300s   # redraw every 5 minutes
-    full_update_every: 12   # full refresh once an hour to clear ghosting
+    full_update_every: 1    # every redraw is a full (flashing) refresh; partial refresh ghosts badly on this panel
     lambda: |-
-      // 296 x 128 landscape
+      // Layout scales to the panel: 250 x 122 landscape on the 2.13" T5
+      const int W = it.get_width(), H = it.get_height();
+      const int HEAD = 18;
+      const int ROW = (H - HEAD - 1) / 4;
+      const int CW = W / 2;
       auto val = [](text_sensor::TextSensor *s, const char *dflt) -> std::string {
         return (s->has_state() && !s->state.empty() && s->state != "unknown" && s->state != "unavailable")
                    ? s->state : std::string(dflt);
@@ -92,14 +102,15 @@ display:
 
       // Header: date on the left, next-prayer countdown on the right
       if (now.is_valid()) {
-        it.printf(4, 2, id(f_head), "%s %d %s", now.strftime("%a").c_str(),
-                  now.day_of_month, now.strftime("%b %Y").c_str());
+        it.printf(3, HEAD / 2, id(f_head), TextAlign::CENTER_LEFT, "%s %d %s",
+                  now.strftime("%a").c_str(), now.day_of_month, now.strftime("%b").c_str());
       }
       if (!next.empty() && !next_in.empty()) {
-        it.printf(292, 2, id(f_head), TextAlign::TOP_RIGHT, "%s in %s", next.c_str(), next_in.c_str());
+        it.printf(W - 3, HEAD / 2, id(f_head), TextAlign::CENTER_RIGHT, "%s in %s",
+                  next.c_str(), next_in.c_str());
       }
-      it.line(0, 22, 295, 22);
-      it.line(148, 22, 148, 127);
+      it.line(0, HEAD, W - 1, HEAD);
+      it.line(CW, HEAD, CW, H - 1);
 
       // 2 x 4 grid, chronological down each column
       struct Cell { const char *name; text_sensor::TextSensor *s; };
@@ -108,18 +119,19 @@ display:
         {"Sunset", id(t_sunset)}, {"Maghrib", id(t_maghrib)}, {"Isha", id(t_isha)},
       };
       for (int i = 0; i < 8; i++) {
-        int x = (i < 4) ? 0 : 149;
-        int y = 24 + (i % 4) * 26;
-        int cy = y + 13;
+        int x = (i < 4) ? 0 : CW + 1;
+        int y = HEAD + 1 + (i % 4) * ROW;
+        int cy = y + ROW / 2;
+        int right = x + CW - 5;
         if (i == 7) {
-          it.print(x + 6, cy, id(f_name), TextAlign::CENTER_LEFT, "Updated");
+          it.print(x + 4, cy, id(f_name), TextAlign::CENTER_LEFT, "Updated");
           if (now.is_valid())
-            it.strftime(x + 141, cy, id(f_time), TextAlign::CENTER_RIGHT, "%H:%M", now);
+            it.strftime(right, cy, id(f_time), TextAlign::CENTER_RIGHT, "%H:%M", now);
           continue;
         }
         bool hl = next == cells[i].name;   // only prayers match; Sunrise/Sunset never do
         Color c = hl ? COLOR_OFF : COLOR_ON;
-        if (hl) it.filled_rectangle(x + 1, y, 146, 25);
-        it.print(x + 6, cy, id(f_name), c, TextAlign::CENTER_LEFT, cells[i].name);
-        it.print(x + 141, cy, id(f_time), c, TextAlign::CENTER_RIGHT, val(cells[i].s, "--:--").c_str());
+        if (hl) it.filled_rectangle(x, y, CW - 1, ROW);
+        it.print(x + 4, cy, id(f_name), c, TextAlign::CENTER_LEFT, cells[i].name);
+        it.print(right, cy, id(f_time), c, TextAlign::CENTER_RIGHT, val(cells[i].s, "--:--").c_str());
       }
