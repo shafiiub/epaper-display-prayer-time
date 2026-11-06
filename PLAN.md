@@ -13,7 +13,7 @@ board. Refresh the screen every 5 minutes and highlight the next prayer.
 |---|---|
 | Device in HA > ESPHome Device Builder | `ttgo-t5-epaper.yaml`, friendly name **TTGO-T5-EPaper**, online at `192.168.1.189` |
 | Board / framework | `esp32dev`, ESP-IDF |
-| Panel | `waveshare_epaper` model `2.90in`, `rotation: 270`, so **296 × 128 px landscape**, black/white |
+| Panel | LilyGO T5 V2.3.1 **2.13"**, `waveshare_epaper` model `2.13in-ttgo-b74`, `rotation: 270`, so **250 × 122 px landscape**, black/white. (The original config said `2.90in`; that driver never refreshed this panel.) |
 | Pins | SPI CLK 18, MOSI 23, CS 5, DC 17, BUSY 4, RST 16 |
 | Firmware | Deployed 2026.3.2, Device Builder is on 2026.10.1 (update pending) |
 | HA location | Sydney, `Australia/Sydney` (uses HA home location) |
@@ -112,7 +112,7 @@ Notes:
   from showing empty times.
 - If a value is missing, draw `--:--` so the screen never goes blank.
 
-### 4. Screen layout (296 × 128)
+### 4. Screen layout (originally drawn for 296 × 128; the code now scales to 250 × 122)
 
 ```
 ┌──────────────────────────────────────────────────┐
